@@ -1,115 +1,195 @@
 ﻿using System.Text;
-using Common;
+using Common.Exceptions;
 
 namespace SudokuSolver;
 
 public class Solver
 {
-    private readonly ISudokuCell[] _cells = new ISudokuCell[81];
+    private const int Size = 81;
 
-    public Solver SetDefaultValues(string startValues)
+    static Solver()
     {
-        Guard.FromNull(startValues);
+        CellGroups = new int[Size][];
 
-        if (startValues.Length != 81)
-        {
-            throw new ArgumentException(paramName: nameof(startValues), message: $"Invalid length ({startValues.Length})");
-        }
+        var byCell = Enumerable.Range(0, CellGroups.GetLength(0)).ToDictionary(x => x, x => GetGroups(x).ToArray());
 
-        for (int i = 0; i < 81; i++)
-        {
-            _cells[i] = CreateSudokuCell(startValues[i], i);
-        }
-
-        return this;
-    }
-    
-    public string Solve()
-    {
-        var startValues = (
-            from defaultCell in _cells.OfType<DefaultSudokuCell>()
-            from cellGroup in defaultCell.Groups
-            select new { defaultCell.Value, Group = cellGroup }).ToList();
-
-        foreach (var startValue in startValues)
-        {
-            var groupMembers = _cells.OfType<SudokuCell>().Where(x => x.Groups.Contains(startValue.Group));
-            foreach (SudokuCell groupMember in groupMembers)
+        var byGroup = (
+            from c in byCell
+            from g in c.Value
+            group new { Cell = c.Key } by g
+            into grp
+            select new
             {
-                groupMember.PossibleValues.Remove(startValue.Value);
-            }
+                Group = grp.Key,
+                Cells = grp.Select(x => x.Cell).ToArray()
+            }).ToDictionary(x => x.Group, x => x.Cells);
+
+        for (int i = 0; i < byCell.Count; i++)
+        {
+            CellGroups[i] = byCell[i].SelectMany(x => byGroup[x]).Where(x => x != i).ToArray();
         }
-
-        while (SolveLastPossibleValue() ||
-               SolveByTesting()) { }
-
-        return _cells.Aggregate(
-            new StringBuilder(_cells.Length),
-            (sb, c) => sb.Append(c.Value),
-            sb => sb.ToString());
     }
 
-    private static ISudokuCell CreateSudokuCell(char value, int pos)
-    {
-        ISudokuCell cell = char.IsNumber(value)
-            ? new DefaultSudokuCell { Pos = pos, Value = value }
-            : new SudokuCell(new[] { '1', '2', '3', '4', '5', '6', '7', '8', '9' }) { Pos = pos, Value = ' ' };
+    private static int[][] CellGroups { get; }
 
+    private static IReadOnlyCollection<char> ValidValues { get; } = new[] { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+
+    public string Solve(string input)
+    {
+        string result = input;
+
+        bool done;
+        do
+        {
+            int pre = result.Count(IsValid);
+
+            result = TrySolveByExclusion(result);
+            if (result.All(IsValid))
+            {
+                return result;
+            }
+
+            result = TrySolveByBruteForce(result);
+            if (result.All(IsValid))
+            {
+                return result;
+            }
+
+            int post = result.Count(IsValid);
+            done = post.Equals(pre);
+        } while (!done);
+
+        return result;
+    }
+
+    private static IEnumerable<string> GetGroups(int pos)
+    {
         int row = pos / 9;
-        cell.Groups.Add($"row_{row}");
+        yield return $"r{row}";
 
         int col = pos % 9;
-        cell.Groups.Add($"col_{col}");
+        yield return $"c{col}";
 
         int grp = row / 3 * 3 + col / 3;
-        cell.Groups.Add($"grp_{grp}");
-
-        return cell;
+        yield return $"g{grp}";
     }
 
-    private void ExcludeValueFromGroupMembers(ISudokuCell cell)
-    {
-        foreach (string cellGroup in cell.Groups)
-        {
-            var groupCells =
-                from c in _cells.OfType<SudokuCell>()
-                where c.PossibleValues.Any()
-                where c.Groups.Contains(cellGroup)
-                select c;
+    private static bool IsValid(char c) => ValidValues.Contains(c);
 
-            foreach (SudokuCell otherCell in groupCells)
+    private List<char>[] GetCandidates(IReadOnlyList<char> input)
+    {
+        var candidates = Enumerable.Range(0, input.Count).Select(x => new List<char>(ValidValues)).ToArray();
+        for (int i = 0; i < input.Count; i++)
+        {
+            if (!IsValid(input[i]))
             {
-                otherCell.PossibleValues.Remove(cell.Value);
+                continue;
+            }
+
+            char value = input[i];
+            foreach (int j in CellGroups[i])
+            {
+                candidates[j].Remove(value);
+            }
+
+            candidates[i].Clear();
+        }
+
+        return candidates;
+    }
+
+    private string TrySolveByBruteForce(string input)
+    {
+        char[] buffer = input.ToCharArray();
+        var candidates = GetCandidates(buffer);
+        var stilValid = new List<char>();
+
+        for (int i = 0; i < input.Length; i++)
+        {
+            stilValid.Clear();
+
+            foreach (char candidate in candidates[i])
+            {
+                var tmp = new StringBuilder(buffer.Length);
+                tmp.Append(buffer, 0, i);
+                tmp.Append(candidate);
+                tmp.Append(buffer, i + 1, buffer.Length - i - 1);
+
+                try
+                {
+                    // Förhoppningen är att denna skall ge fel på alla värden förutom ett
+                    TrySolveByExclusion(tmp.ToString());
+                    stilValid.Add(candidate);
+                }
+                catch (NotSolvableException) { }
+
+                if (stilValid.Count > 1)
+                {
+                    break;
+                }
+            }
+
+            if (stilValid.Count == 1)
+            {
+                buffer[i] = stilValid.Single();
             }
         }
+
+        return new string(buffer);
     }
 
-    private bool SolveByTesting()
+    private string TrySolveByExclusion(string input)
     {
-        return false;
-    }
+        char[] buffer = input.ToCharArray();
+        var candidates = GetCandidates(buffer);
 
-    private bool SolveLastPossibleValue()
-    {
-        var canBeSolved = (
-            from cell in _cells.OfType<SudokuCell>()
-            where cell.HasValue == false
-            where cell.PossibleValues.Count == 1
-            select cell).ToList();
+        var addedValues = new Queue<int>(16);
+        var handledCells = new HashSet<int>(input.Length);
 
-        if (canBeSolved.Count == 0)
+        bool done = false;
+        while (!done)
         {
-            return false;
+            done = true;
+
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (candidates[i].Count == 1)
+                {
+                    char value = candidates[i].Single();
+
+                    if (CellGroups[i].Any(j => buffer[j] == value))
+                    {
+                        throw new NotSolvableException();
+                    }
+
+                    buffer[i] = value;
+                    candidates[i].Clear();
+
+                    addedValues.Enqueue(i);
+                }
+            }
+
+            while (addedValues.TryDequeue(out int pos))
+            {
+                if (!handledCells.Add(pos))
+                {
+                    addedValues.Enqueue(pos);
+                }
+
+                foreach (int j in CellGroups[pos])
+                {
+                    candidates[j].Remove(buffer[pos]);
+
+                    if (candidates[j].Count == 0 && !IsValid(buffer[j]))
+                    {
+                        throw new NotSolvableException();
+                    }
+                }
+
+                done = false;
+            }
         }
 
-        foreach (SudokuCell cell in canBeSolved)
-        {
-            cell.Value = cell.PossibleValues.Single();
-            cell.PossibleValues.Clear();
-
-            ExcludeValueFromGroupMembers(cell);
-        }
-
-        return true;
+        return new string(buffer);
     }
 }
