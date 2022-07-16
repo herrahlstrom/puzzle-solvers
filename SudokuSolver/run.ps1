@@ -1,0 +1,1 @@
+﻿ cat input.txt | dotnet run -c Release
