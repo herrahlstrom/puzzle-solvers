@@ -16,119 +16,45 @@ while (Console.ReadLine() is { } input)
     Console.WriteLine();
 }
 
-void PrintSudoku(params string[] value)
+
+void PrintSudoku(string input, string result)
 {
-    for (int i = 0; i < value.Length; i++)
+    const string template = @"+-----+-----+-----+
++ ### + ### + ### +
++ ### + ### + ### +
++ ### + ### + ### +
++-----+-----+-----+
++ ### + ### + ### +
++ ### + ### + ### +
++ ### + ### + ### +
++-----+-----+-----+
++ ### + ### + ### +
++ ### + ### + ### +
++ ### + ### + ### +
++-----+-----+-----+";
+
+    ConsoleColor bkFg = Console.ForegroundColor;
+    for (int i = 0, j = 0; j < template.Length; j++)
     {
-        if (i > 0)
+        if (template[j] == '#')
         {
-            Console.Write("\t");
-        }
-
-        Console.Write("+-----+-----+-----+");
-    }
-
-    Console.WriteLine();
-
-    for (int start = 0; start < 27; start += 9)
-    {
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (i > 0)
+            if (result[i] == input[i])
             {
-                Console.Write("\t");
+                Console.Write(result[i]);
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write(result[i]);
+                Console.ForegroundColor = bkFg;
             }
 
-            string s = value[i];
-
-            Console.Write("+ ");
-            Console.Write(s.Substring(start, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 3, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 6, 3));
-            Console.Write(" +");
+            i++;
         }
-
-        Console.WriteLine();
-    }
-
-    for (int i = 0; i < value.Length; i++)
-    {
-        if (i > 0)
+        else
         {
-            Console.Write("\t");
+            Console.Write(template[j]);
         }
-
-        Console.Write("+-----+-----+-----+");
-    }
-
-    Console.WriteLine();
-
-    for (int start = 27; start < 54; start += 9)
-    {
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (i > 0)
-            {
-                Console.Write("\t");
-            }
-
-            string s = value[i];
-            Console.Write("+ ");
-            Console.Write(s.Substring(start, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 3, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 6, 3));
-            Console.Write(" +");
-        }
-
-        Console.WriteLine();
-    }
-
-    for (int i = 0; i < value.Length; i++)
-    {
-        if (i > 0)
-        {
-            Console.Write("\t");
-        }
-
-        Console.Write("+-----+-----+-----+");
-    }
-
-    Console.WriteLine();
-
-    for (int start = 54; start < 81; start += 9)
-    {
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (i > 0)
-            {
-                Console.Write("\t");
-            }
-
-            string s = value[i];
-            Console.Write("+ ");
-            Console.Write(s.Substring(start, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 3, 3));
-            Console.Write(" + ");
-            Console.Write(s.Substring(start + 6, 3));
-            Console.Write(" +");
-        }
-
-        Console.WriteLine();
-    }
-
-    for (int i = 0; i < value.Length; i++)
-    {
-        if (i > 0)
-        {
-            Console.Write("\t");
-        }
-
-        Console.Write("+-----+-----+-----+");
     }
 
     Console.WriteLine();
